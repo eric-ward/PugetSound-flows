@@ -1,4 +1,4 @@
-## PugetSound-flows
+### PugetSound-flows
 ==============
 This repository is designed to accompany and update the recent paper
 
