@@ -1,0 +1,171 @@
+---
+title: "Calculating trends in flow variability of Puget Sound rivers"
+author: "Eric Ward, eric.ward@noaa.gov"
+date: "December 9, 2015"
+output:
+  word_document: default
+  pdf_document:
+    fig_caption: yes
+---
+
+```{r}
+library(waterData)
+```
+
+Next we'll create a vector of gauge IDs we want to use
+```{r}
+df = data.frame("river" = c("Sammamish","Cedar", "Dungeness", "Elwha", "Upper Sauk", 
+"SF Stillaguamish", "SF Nooksack", "NF Stillaguamish", "Skokomish", "Cascade", 
+"NF Nooksack", "Lower Skagit", "Lower Sauk", "White", "Puyallup", "Skykomish", 
+"Snoqualmie", "Duwamish", "Upper Skagit", "Nisqually"), "gauge" = c(12125200, 
+12119000, 12048000, 12045500, 12186000, 12161000, 12209000, 12167000, 
+12061500, 12182500, 12205000, 12200500, 12189500, 12098500, 12093500, 
+12134500, 12149000, 12113000, 12181000, 12089500))
+
+nRivers = dim(df)[1]
+```
+
+## Retrieving data from USGS
+We'll use the $waterData$ package to grab the data from each gauge. 
+
+```{r, warning=FALSE, message=FALSE}
+waterList = list()
+
+for(r in 1:nRivers) {
+dat = importDVs(staid = paste(df$gauge[r]))
+datesList = strsplit(as.character(dat$dates), "-")
+dat$year = as.numeric(lapply(datesList, getElement, 1))
+dat$month = as.numeric(lapply(datesList, getElement, 2))
+dat$day = as.numeric(lapply(datesList, getElement, 3))
+
+# calculate water month and year
+dat$waterMonth = NA
+dat$waterMonth[dat$month %in%c(10,11,12)] = dat$month[dat$month %in%c(10,11,12)] - 9
+dat$waterMonth[dat$month %in%seq(1,9)] = dat$month[dat$month %in%seq(1,9)] + 3
+
+dat$waterYear = dat$year
+# months Jan - Sept become part of water year starting last Oct 1
+dat$waterYear[dat$month %in%seq(1,9)] = dat$waterYear[dat$month %in%seq(1,9)] - 1
+
+waterList[[r]] = dat
+}
+```
+
+## Winter Flow Patterns
+We can do the analysis on the full water year of data, but we can also focus on seasons. For example, for Puget Sound winter flows, we might want to focus on October - February (water months 1-5). 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+summaryMonths = seq(1,5)
+this.year = as.numeric(as.character(Sys.Date(), format = "%Y"))
+all.years = seq(1851, this.year)
+summary.discharge = matrix(NA, length(all.years), nRivers)
+summary.variability = matrix(NA, length(all.years), nRivers)
+
+for(r in 1:nRivers) {
+  for(y in 1:length(all.years)) {
+    idx = which(waterList[[r]]$waterYear == all.years[y] & waterList[[r]]$waterMonth %in% 
+    summaryMonths)
+    if(length(idx) > 0) summary.discharge[y, r] = mean(log(waterList[[r]]$val[idx]), 
+    na.rm=T)
+    if(length(idx) > 0) summary.variability[y, r] = sd(diff(log(waterList[[r]]$val[idx])), 
+    na.rm=T)
+  }
+}
+```
+
+### Summary plots of winter discharge and variability
+
+```{r, fig.cap="Observed mean daily winter discharge by river and water year. Winter months are defined as October through February.", fig.pos="placeHere", echo=FALSE}
+par(mfrow = c(5,4), mgp = c(2,0.5,0), mai = c(0.25,0.3,0.2, 0.1))
+# filter out years with no observations
+start = which((apply(summary.discharge, 1, sum, na.rm=T))!=0)[1]
+for(i in 1:nRivers) {
+
+  ys = exp(summary.discharge[-c(1:(start-1)),i])
+  xs = all.years[-c(1:(start-1))]
+  min(xs[is.na(ys)])
+
+  pred = predict.lm(lm(ys ~ xs), newdata=list(xs))
+  plot(xs, ys, type="l", main = df$river[i], cex.main=0.9, ylab = "")
+  indx = which(xs %in% seq(min(xs[is.na(ys)==F]), max(xs[is.na(ys)==F])))  
+  lines(xs[indx], pred[indx], col="red")
+}
+```
+
+
+```{r, fig.cap="Observed standard deviation of log-differenced daily winter flows by river and water year. Winter months are defined as October through February.", fig.pos="placeHere"}
+par(mfrow = c(5,4), mgp = c(2,0.5,0), mai = c(0.25,0.3,0.2, 0.1))
+# filter out years with no observations
+start = which((apply(summary.variability, 1, sum, na.rm=T))!=0)[1]
+for(i in 1:nRivers) {
+
+  ys = exp(summary.variability[-c(1:(start-1)),i])
+  xs = all.years[-c(1:(start-1))]
+  min(xs[is.na(ys)])
+
+  pred = predict.lm(lm(ys ~ xs), newdata=list(xs))
+  plot(xs, ys, type="l", main = df$river[i], cex.main=0.9, ylab = "")
+  indx = which(xs %in% seq(min(xs[is.na(ys)==F]), max(xs[is.na(ys)==F])))  
+  lines(xs[indx], pred[indx], col="red")
+}
+```
+
+
+## Summer Flow Patterns
+We can do the analysis on the full water year of data, but we can also focus on seasons. For example, for Puget Sound summer flows, we might want to focus on May - August (water months 8-11). 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+summaryMonths = seq(8,11)
+this.year = as.numeric(as.character(Sys.Date(), format = "%Y"))
+all.years = seq(1851, this.year)
+summary.discharge = matrix(NA, length(all.years), nRivers)
+summary.variability = matrix(NA, length(all.years), nRivers)
+
+for(r in 1:nRivers) {
+  for(y in 1:length(all.years)) {
+    idx = which(waterList[[r]]$waterYear == all.years[y] & waterList[[r]]$waterMonth %in% 
+    summaryMonths)
+    if(length(idx) > 0) summary.discharge[y, r] = mean(log(waterList[[r]]$val[idx]), 
+    na.rm=T)
+    if(length(idx) > 0) summary.variability[y, r] = sd(diff(log(waterList[[r]]$val[idx])), 
+    na.rm=T)
+  }
+}
+```
+
+### Summary plots of summer discharge and variability
+
+```{r, fig.cap="Observed mean daily summer discharge by river and water year. Summer months are defined as May through August.", fig.pos="placeHere", echo=FALSE}
+par(mfrow = c(5,4), mgp = c(2,0.5,0), mai = c(0.25,0.3,0.2, 0.1))
+# filter out years with no observations
+start = which((apply(summary.discharge, 1, sum, na.rm=T))!=0)[1]
+for(i in 1:nRivers) {
+
+  ys = exp(summary.discharge[-c(1:(start-1)),i])
+  xs = all.years[-c(1:(start-1))]
+  min(xs[is.na(ys)])
+
+  pred = predict.lm(lm(ys ~ xs), newdata=list(xs))
+  plot(xs, ys, type="l", main = df$river[i], cex.main=0.9, ylab = "")
+  indx = which(xs %in% seq(min(xs[is.na(ys)==F]), max(xs[is.na(ys)==F])))  
+  lines(xs[indx], pred[indx], col="blue")
+}
+```
+
+
+```{r, fig.cap="Observed standard deviation of log-differenced daily winter flows by river and water year. Summer months are defined as May through August.", fig.pos="placeHere", echo=FALSE}
+par(mfrow = c(5,4), mgp = c(2,0.5,0), mai = c(0.25,0.3,0.2, 0.1))
+# filter out years with no observations
+start = which((apply(summary.variability, 1, sum, na.rm=T))!=0)[1]
+for(i in 1:nRivers) {
+
+  ys = exp(summary.variability[-c(1:(start-1)),i])
+  xs = all.years[-c(1:(start-1))]
+  min(xs[is.na(ys)])
+
+  pred = predict.lm(lm(ys ~ xs), newdata=list(xs))
+  plot(xs, ys, type="l", main = df$river[i], cex.main=0.9, ylab = "")
+  indx = which(xs %in% seq(min(xs[is.na(ys)==F]), max(xs[is.na(ys)==F])))  
+  lines(xs[indx], pred[indx], col="blue")
+}
+```
